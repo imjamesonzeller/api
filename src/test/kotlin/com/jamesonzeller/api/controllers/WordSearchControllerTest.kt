@@ -10,8 +10,10 @@ import org.springframework.test.web.servlet.post
 import org.hamcrest.Matchers.hasItem
 import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
+import org.springframework.test.context.ActiveProfiles
 
 @Import(SecurityConfig::class)
+@ActiveProfiles("test")
 @WebMvcTest(WordSearchController::class)
 class WordSearchControllerTest {
 

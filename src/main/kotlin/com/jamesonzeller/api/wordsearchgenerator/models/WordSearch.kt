@@ -66,16 +66,12 @@ class WordSearch(
                 val currX = xPos + xOffset
 
                 try {
-                    if (currX !in 0 until size || currY !in 0 until size) {
-                        validDirection = false
-                        break
-                    }
                     // Checks if current location for word is blank or matches current character, if neither of those apply then direction is invalid.
                     if (grid[currY][currX] != "_" && grid[currY][currX] != word[i].toString()) {
                         validDirection = false
                         break
                     }
-                } catch (e: RangeException) {
+                } catch (e: IndexOutOfBoundsException) {
                     validDirection = false
                     break
                 }
