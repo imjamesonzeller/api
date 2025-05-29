@@ -41,10 +41,6 @@ class UpcomingEventsService(
     }
 
     fun getUpcomingEvents(): List<Event> {
-        val credentials = ServiceAccountCredentials
-            .fromStream(FileInputStream(serviceAccountPath))
-            .createScoped(SCOPES)
-
         try {
             val httpRequestInitializer: HttpRequestInitializer = com.google.api.client.googleapis.auth.oauth2.GoogleCredential
                 .fromStream(FileInputStream(serviceAccountPath))
@@ -53,7 +49,6 @@ class UpcomingEventsService(
             val calendarService = Calendar.Builder(httpTransport, jsonFactory, httpRequestInitializer)
                 .setApplicationName("Calendar Events")
                 .build()
-
 
             val now = ZonedDateTime.now(ZoneOffset.UTC)
             val isoNow = now.truncatedTo(java.time.temporal.ChronoUnit.SECONDS).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
