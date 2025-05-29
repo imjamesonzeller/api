@@ -38,6 +38,5 @@ out/
 
 ### Kotlin ###
 .kotlin
-
 ### Custom ###
-service.json
+src/main/resources/service.json
