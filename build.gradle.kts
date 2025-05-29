@@ -28,6 +28,10 @@ dependencies {
 	implementation("com.fasterxml.jackson.core:jackson-databind:2.17.0")
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
 
+	implementation("com.google.auth:google-auth-library-oauth2-http:1.19.0")
+	implementation("com.google.api-client:google-api-client:2.4.1")
+	implementation("com.google.apis:google-api-services-calendar:v3-rev20220715-2.0.0")
+
 	testImplementation("org.springframework.boot:spring-boot-starter-test") {
 		exclude(group = "org.junit.vintage", module = "junit-vintage-engine")
 	}
