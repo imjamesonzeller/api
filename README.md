@@ -17,10 +17,12 @@ This repository houses a collection of custom **Spring Boot** APIs deployed to a
 ## 🔌 Public Endpoints
 
 ### `GET /get_current_read`
+Repo: [Link](https://github.com/imjamesonzeller/wordsearchapi)
 Fetches the current book being read from Goodreads.  
 **Returns:** `{"currentRead": "Book Title by Author Name"}`
 
 ### `GET` & `POST /generate_word_search`
+Repo: [Link](https://github.com/imjamesonzeller/goodreadsapi)
 Generates a randomized word search puzzle based on input or default word list.
 - `GET`: Returns a default puzzle
 - `POST`: Accepts JSON input of custom words  
