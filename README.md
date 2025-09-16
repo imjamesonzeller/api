@@ -44,15 +44,15 @@ Retrieves active to-do items from a Notion database.
 
 ---
 
-## 🧠 Planned Endpoints for Tasklight Integration
+## 🧠 Endpoints for Tasklight Integration
 
-These endpoints will serve the [Tasklight](https://jamesonzeller.com/tasklight) productivity app:
+These endpoints will serve the [Tasklight](https://jamesonzeller.com/tasklight-v3) productivity app:
 
-### `POST /track_usage`
-Logs user activity and AI usage counts.
+### `POST /increment_usage`
+Increments user AI API key usage.
 
-### `GET /get_quota`
-Returns remaining free-tier quota or subscription status.
+### `GET /check_usage`
+Returns remaining free-tier quota for user.
 
 ---
 
