@@ -14,7 +14,6 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @Configuration
 class SecurityConfig(
     @Value("\${API_KEY}") private val expectedApiKey: String,
-    private val jwtAuthFilter: JwtAuthFilter
 ) {
 
     @Bean
@@ -28,10 +27,9 @@ class SecurityConfig(
                     .requestMatchers("/get_current_read").permitAll()
                     .requestMatchers("/error").permitAll()
                     .requestMatchers("/mirror/**").hasRole("API")
-                    .requestMatchers("/tasklight/auth/**").permitAll()
+                    .requestMatchers("/tasklight/**").permitAll()
                     .anyRequest().authenticated()
             }
-            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter::class.java)
             .addFilterAt(apiKeyFilter(), UsernamePasswordAuthenticationFilter::class.java)
             .build()
     }

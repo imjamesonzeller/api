@@ -1,68 +1,88 @@
 package com.jamesonzeller.api.controllers
 
-import com.jamesonzeller.api.tasklight.services.JwtService
-import com.jamesonzeller.api.tasklight.services.UsageService
-import com.jamesonzeller.api.tasklight.services.UserService
+import com.jamesonzeller.api.tasklight.models.UsageIncrementResult
+import com.jamesonzeller.api.tasklight.models.UsageStatus
 import jakarta.servlet.http.HttpServletRequest
-import org.springframework.http.HttpStatus
+import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.util.*
+
+const val DAILY_LIMIT = 3
 
 @RestController
 @RequestMapping("/tasklight")
 class TasklightController(
-    private val userService: UserService,
-    private val jwtService: JwtService,
-    private val usageService: UsageService
+    private val redis: StringRedisTemplate
 ) {
-    data class AuthRequest(val email: String, val password: String)
+    private val zone: ZoneId = ZoneId.of("America/Chicago")
 
-    @PostMapping("/auth/register")
-    fun register(
-        @RequestBody req: AuthRequest
-    ) : ResponseEntity<Any> {
-        return try {
-            val user = userService.register(req.email, req.password)
-            val token = jwtService.generateToken(user.id!!)
-            ResponseEntity.ok(mapOf("token" to token))
-        } catch (e: Exception) {
-            ResponseEntity.badRequest().body(mapOf("error" to e.message))
+    private fun notionUserId(req: HttpServletRequest): String? {
+        return req.getHeader("X-Notion-User-Id")?.trim()?.takeIf { it.isNotBlank() }
+    }
+
+    private fun dailyKey(userId: String, date: LocalDate = LocalDate.now(zone)): String {
+        return "user:$userId:tasklight:daily:$date"
+    }
+
+    private fun setExpiryAtEndOfDayIfFirst(key: String, newVal: Long) {
+        if (newVal == 1L) {
+            val endOfDay = ZonedDateTime.now(zone).toLocalDate().atTime(23, 59, 59)
+            val expiryInstant = endOfDay.atZone(zone).toInstant()
+            redis.expireAt(key, Date.from(expiryInstant))
         }
     }
 
-    @PostMapping("/auth/login")
-    fun login(
-        @RequestBody req: AuthRequest
-    ) : ResponseEntity<Any> {
-        return try {
-            val user = userService.login(req.email, req.password)
-            val token = jwtService.generateToken(user.id!!)
-            ResponseEntity.ok(mapOf("token" to token))
-        } catch (e: Exception) {
-            ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(mapOf("error" to e.message))
-        }
+    private fun getUsed(userId: String): Long {
+        val key = dailyKey(userId)
+        return redis.opsForValue().get(key)?.toLong() ?: 0L;
     }
 
     @GetMapping("/check_usage")
     fun checkUsage(
         request: HttpServletRequest
     ): ResponseEntity<Any> {
-        val userId = request.getAttribute("userId")?.toString()?.let(UUID::fromString)
-            ?: return ResponseEntity.status(401).build()
+        val userId = notionUserId(request)
+            ?: return ResponseEntity.badRequest().body(mapOf("error" to "Missing X-Notion-User-Id header"))
 
-        val usage = usageService.getTodayUsage(userId)
-        return ResponseEntity.ok(mapOf("requestsMade" to usage))
+        val today = LocalDate.now(zone)
+        val used = getUsed(userId)
+        val remaining = (DAILY_LIMIT - used).coerceAtLeast(0)
+        val allowed = used < DAILY_LIMIT
+
+        return ResponseEntity.ok(
+            UsageStatus(
+                allowed = allowed,
+                used = used,
+                remaining = remaining.toLong(),
+                limit = DAILY_LIMIT,
+                date = today.toString()
+            )
+        )
     }
 
     @PostMapping("/increment_usage")
     fun incrementUsage(
         request: HttpServletRequest
     ): ResponseEntity<Any> {
-        val userId = request.getAttribute("userId")?.toString()?.let(UUID::fromString)
-            ?: return ResponseEntity.status(401).build()
+        val userId = notionUserId(request)
+            ?: return ResponseEntity.badRequest().body(mapOf("error" to "Missing X-Notion-User-Id header"))
 
-        val usage = usageService.incrementUsage(userId)
-        return ResponseEntity.ok(mapOf("requestsMade" to usage))
+        val today = LocalDate.now(zone)
+        val key = dailyKey(userId, today)
+        val newVal = redis.opsForValue().increment(key)!!
+
+        setExpiryAtEndOfDayIfFirst(key, newVal)
+
+        return ResponseEntity.ok(
+            UsageIncrementResult(
+                used = newVal,
+                limit = DAILY_LIMIT,
+                date = today.toString()
+            )
+        )
     }
 }
