@@ -90,7 +90,7 @@ class TasklightController(
             You are a precise and reliable task parsing assistant. 
             Your job is to convert natural-language task descriptions into clean, structured data.
 
-            Today's date is ${today.format(DateTimeFormatter.ISO_DAT    E)}. Today is a $weekday.
+            Today's date is ${today.format(DateTimeFormatter.ISO_DATE)}. Today is a $weekday.
 
             When parsing dates:
             - Always interpret dates as referring to the **next upcoming instance in the future** (never in the past) unless the text clearly says “last” or “previous”.
