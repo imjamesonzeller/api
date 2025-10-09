@@ -9,6 +9,7 @@ import com.google.api.client.json.gson.GsonFactory
 import com.google.api.client.util.DateTime
 import com.google.auth.oauth2.ServiceAccountCredentials
 import com.google.api.services.calendar.Calendar
+import com.google.auth.http.HttpCredentialsAdapter
 import org.apache.http.HttpException
 import java.io.FileInputStream
 import java.time.LocalDate
@@ -23,13 +24,13 @@ import kotlin.system.exitProcess
 class UpcomingEventsService(
     @Value("\${SERVICE_ACCOUNT_PATH}") private val serviceAccountPath: String
 ) {
+    private val zone = java.time.ZoneId.of("America/Chicago")
     private data class RequestInformation(
         val calendarId: String,
         val now: String,
         val tomorrow: String,
     )
 
-    private val events: MutableList<Event> = emptyList<Event>().toMutableList()
     private val SCOPES = listOf("https://www.googleapis.com/auth/calendar.readonly")
 
     private val jsonFactory = GsonFactory.getDefaultInstance()
@@ -41,10 +42,18 @@ class UpcomingEventsService(
     }
 
     fun getUpcomingEvents(): List<Event> {
+        val events: MutableList<Event> = emptyList<Event>().toMutableList()
+
         try {
-            val httpRequestInitializer: HttpRequestInitializer = com.google.api.client.googleapis.auth.oauth2.GoogleCredential
+//            val httpRequestInitializer: HttpRequestInitializer = com.google.api.client.googleapis.auth.oauth2.GoogleCredential
+//                .fromStream(FileInputStream(serviceAccountPath))
+//                .createScoped(SCOPES)
+
+            val credentials = ServiceAccountCredentials
                 .fromStream(FileInputStream(serviceAccountPath))
                 .createScoped(SCOPES)
+
+            val httpRequestInitializer: HttpRequestInitializer = HttpCredentialsAdapter(credentials)
 
             val calendarService = Calendar.Builder(httpTransport, jsonFactory, httpRequestInitializer)
                 .setApplicationName("Calendar Events")
@@ -72,11 +81,12 @@ class UpcomingEventsService(
             for (calendarID in calendarIDs) {
                 requestAPI(
                     calendarService,
-                    RequestInformation(calendarID, isoNow, isoMidnightTomorrow)
+                    RequestInformation(calendarID, isoNow, isoMidnightTomorrow),
+                    events
                 )
             }
-
-            events.sortAndTruncate()
+            events.sortAndTruncateInPlace()
+            println(events)
             return events.removeTomorrowEvents()
         } catch (e: HttpException) {
             println("An error occured: ${e.message}")
@@ -84,7 +94,11 @@ class UpcomingEventsService(
         }
     }
 
-    private fun requestAPI(service: Calendar, info: RequestInformation): Unit {
+    private fun requestAPI(
+        service: Calendar,
+        info: RequestInformation,
+        events: MutableList<Event>
+    ): Unit {
         val timeMin = DateTime(info.now)
         val timeMax = DateTime(info.tomorrow)
 
@@ -103,6 +117,7 @@ class UpcomingEventsService(
         }
 
         for (event in items) {
+            println(event)
             val name = event.summary ?: "No Title"
             val start = event.start?.dateTime?.toString() ?: event.start?.date?.toString() ?: "Unknown Start"
             val end = event.end?.dateTime?.toString() ?: event.end?.date?.toString() ?: "Unknown End"
@@ -112,15 +127,18 @@ class UpcomingEventsService(
         }
     }
 
-    fun List<Event>.sortAndTruncate(): List<Event> = this.sorted().take(10)
+    fun MutableList<Event>.sortAndTruncateInPlace() {
+        this.sortBy { it.sortKey }
+        if (this.size > 10) this.subList(10, this.size).clear()
+    }
 
     fun List<Event>.removeTomorrowEvents(): List<Event> {
-        val tomorrow = LocalDate.now().plusDays(1)
+        val tomorrow = LocalDate.now(zone).plusDays(1)
         val filtered = mutableListOf<Event>()
 
         for (event in this) {
             filtered.add(event)
-            val eventDate = ZonedDateTime.parse(event.trueStart).toLocalDate()
+            val eventDate = parseFlexibleZonedDateTime(event.trueStart).withZoneSameInstant(zone).toLocalDate()
 
             if (eventDate == tomorrow) {
                 break
@@ -134,7 +152,7 @@ class UpcomingEventsService(
         return try {
             ZonedDateTime.parse(input)
         } catch (e: DateTimeParseException) {
-            LocalDate.parse(input).atStartOfDay(ZoneOffset.UTC)
+            LocalDate.parse(input).atStartOfDay(zone)
         }
     }
 
