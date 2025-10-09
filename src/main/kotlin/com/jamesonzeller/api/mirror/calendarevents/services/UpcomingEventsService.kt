@@ -1,28 +1,19 @@
 package com.jamesonzeller.api.mirror.calendarevents.services
 
 import com.jamesonzeller.api.mirror.calendarevents.models.Event
-import org.springframework.beans.factory.annotation.Value
-import org.springframework.stereotype.Service
-import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
-import com.google.api.client.http.HttpRequestInitializer
-import com.google.api.client.json.gson.GsonFactory
-import com.google.api.client.util.DateTime
-import com.google.auth.oauth2.ServiceAccountCredentials
 import com.google.api.services.calendar.Calendar
-import com.google.auth.http.HttpCredentialsAdapter
 import org.apache.http.HttpException
-import java.io.FileInputStream
+import org.springframework.stereotype.Service
 import java.time.LocalDate
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.time.ZoneOffset
 import java.time.format.DateTimeParseException
-import kotlin.system.exitProcess
 
 @Service
 class UpcomingEventsService(
-    @Value("\${SERVICE_ACCOUNT_PATH}") private val serviceAccountPath: String
+    private val calendarService: Calendar
 ) {
     private val zone = java.time.ZoneId.of("America/Chicago")
     private data class RequestInformation(
@@ -31,36 +22,12 @@ class UpcomingEventsService(
         val tomorrow: String,
     )
 
-    private val SCOPES = listOf("https://www.googleapis.com/auth/calendar.readonly")
-
-    private val jsonFactory = GsonFactory.getDefaultInstance()
-    private var httpTransport = try {
-        GoogleNetHttpTransport.newTrustedTransport();
-    } catch (e: Exception) {
-        e.printStackTrace();
-        exitProcess(1);
-    }
-
     fun getUpcomingEvents(): List<Event> {
         val events: MutableList<Event> = emptyList<Event>().toMutableList()
 
         try {
-//            val httpRequestInitializer: HttpRequestInitializer = com.google.api.client.googleapis.auth.oauth2.GoogleCredential
-//                .fromStream(FileInputStream(serviceAccountPath))
-//                .createScoped(SCOPES)
-
-            val credentials = ServiceAccountCredentials
-                .fromStream(FileInputStream(serviceAccountPath))
-                .createScoped(SCOPES)
-
-            val httpRequestInitializer: HttpRequestInitializer = HttpCredentialsAdapter(credentials)
-
-            val calendarService = Calendar.Builder(httpTransport, jsonFactory, httpRequestInitializer)
-                .setApplicationName("Calendar Events")
-                .build()
-
             val now = ZonedDateTime.now(ZoneOffset.UTC)
-            val isoNow = now.truncatedTo(java.time.temporal.ChronoUnit.SECONDS).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+            val isoNow = now.truncatedTo(ChronoUnit.SECONDS).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
 
             val midnightTomorrow = now.plusDays(1)
                 .withHour(23)
@@ -86,7 +53,6 @@ class UpcomingEventsService(
                 )
             }
             events.sortAndTruncateInPlace()
-            println(events)
             return events.removeTomorrowEvents()
         } catch (e: HttpException) {
             println("An error occured: ${e.message}")
@@ -99,8 +65,8 @@ class UpcomingEventsService(
         info: RequestInformation,
         events: MutableList<Event>
     ): Unit {
-        val timeMin = DateTime(info.now)
-        val timeMax = DateTime(info.tomorrow)
+        val timeMin = com.google.api.client.util.DateTime(info.now)
+        val timeMax = com.google.api.client.util.DateTime(info.tomorrow)
 
         val eventsResults = service.events().list(info.calendarId)
             .setTimeMin(timeMin)
@@ -117,7 +83,6 @@ class UpcomingEventsService(
         }
 
         for (event in items) {
-            println(event)
             val name = event.summary ?: "No Title"
             val start = event.start?.dateTime?.toString() ?: event.start?.date?.toString() ?: "Unknown Start"
             val end = event.end?.dateTime?.toString() ?: event.end?.date?.toString() ?: "Unknown End"

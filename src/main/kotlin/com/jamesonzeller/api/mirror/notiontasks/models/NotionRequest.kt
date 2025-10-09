@@ -15,12 +15,30 @@ import kotlinx.serialization.json.*
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 
 class NotionRequest(
     private var dbid: String,
     private var apiSecret: String,
     private var filter: NotionFilter
 ) {
+    private val zone: ZoneId = ZoneId.of("America/Chicago")
+    companion object {
+        private val jsonConfig = Json {
+            ignoreUnknownKeys = true
+            isLenient = true
+        }
+
+        val client: HttpClient by lazy {
+            HttpClient(CIO) {
+                install(ContentNegotiation) {
+                    json(jsonConfig)
+                }
+            }
+        }
+    }
 
     @Serializable
     data class RequestResponse(
@@ -28,18 +46,6 @@ class NotionRequest(
     )
 
     private fun request(): RequestResponse = runBlocking {
-        val client = HttpClient(CIO) {
-            install(ContentNegotiation) {
-                json(Json {
-                    ignoreUnknownKeys = true
-                    isLenient = true
-                })
-            }
-        }
-
-        println("📤 Sending request to Notion with filter: $filter")
-        println("🔐 Using API key: ${apiSecret.take(5)}...")
-
         val response: HttpResponse = client.post("https://api.notion.com/v1/databases/$dbid/query") {
             header(HttpHeaders.Authorization, "Bearer $apiSecret")
             header(HttpHeaders.ContentType, ContentType.Application.Json)
@@ -48,14 +54,26 @@ class NotionRequest(
         }
 
         val rawBody = response.bodyAsText()
-        println("📥 Raw response body: $rawBody")
 
-        Json {ignoreUnknownKeys = true}.decodeFromString<RequestResponse>(rawBody)
+        jsonConfig.decodeFromString<RequestResponse>(rawBody)
     }
 
     fun fetchTasks(): List<Task> {
         val requestResponse = request()
         return parseNotionResponse(requestResponse)
+    }
+
+    private fun toInstantOrNull(s: String?): Instant? {
+        if (s == null) return null
+        return try {
+            ZonedDateTime.parse(s).toInstant()
+        } catch (_: DateTimeParseException) {
+            try {
+                LocalDate.parse(s).atStartOfDay(zone).toInstant()
+            } catch (_: DateTimeParseException) {
+                null
+            }
+        }
     }
 
     private fun formatDueDate(dueDate: String): String {
@@ -75,7 +93,7 @@ class NotionRequest(
     }
 
     private fun parseNotionResponse(response: RequestResponse): List<Task> {
-        val tasks = mutableListOf<Task>()
+        val items = mutableListOf<Pair<Instant?, Task>>()
 
         for (result in response.results) {
             val properties = result["properties"]?.takeIf { it !is JsonNull }?.jsonObject ?: continue
@@ -96,10 +114,11 @@ class NotionRequest(
                 ?.takeIf { it !is JsonNull }
                 ?.jsonObject
 
-            val dueDate = dueDateObj?.get("start")
+            val rawStart = dueDateObj?.get("start")
                 ?.takeIf { it !is JsonNull }
                 ?.jsonPrimitive?.content
-                ?.let { formatDueDate(it) } ?: "No Due Date"
+
+            val dueDate = rawStart?.let { formatDueDate(it) } ?: "No Due Date"
 
             val priority = properties["Priority"]
                 ?.takeIf { it !is JsonNull }
@@ -109,9 +128,12 @@ class NotionRequest(
                 ?.takeIf { it !is JsonNull }
                 ?.jsonPrimitive?.content ?: "No Priority Assigned"
 
-            tasks.add(Task(name, dueDate, priority))
+            val sortKey = toInstantOrNull(rawStart)
+            items.add(sortKey to Task(name, dueDate, priority))
         }
 
-        return tasks
+        return items
+            .sortedBy { it.first ?: Instant.MAX }
+            .map { it.second }
     }
 }
