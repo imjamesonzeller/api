@@ -5,8 +5,10 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.web.filter.OncePerRequestFilter
+import org.slf4j.LoggerFactory
 
 class ApiKeyFilter(private val expectedApiKey: String) : OncePerRequestFilter() {
+    private val log = LoggerFactory.getLogger(ApiKeyFilter::class.java)
 
     override fun doFilterInternal(
         request: HttpServletRequest,
@@ -19,7 +21,7 @@ class ApiKeyFilter(private val expectedApiKey: String) : OncePerRequestFilter() 
             val apiKey = request.getHeader("x-api-key")
 
             if (apiKey.isNullOrEmpty() || apiKey != expectedApiKey) {
-                println("❌ Invalid or missing API key")
+                log.warn("Invalid or missing API key for path {}", path)
                 response.status = HttpServletResponse.SC_FORBIDDEN
                 response.writer.write("Forbidden: Invalid API Key")
                 return
@@ -29,7 +31,7 @@ class ApiKeyFilter(private val expectedApiKey: String) : OncePerRequestFilter() 
             val auth = UsernamePasswordAuthenticationToken(
                 "api-key-user", null, listOf(SimpleGrantedAuthority("ROLE_API"))
             )
-            println("✅ API key accepted, setting ROLE_API authentication")
+            log.info("API key accepted, setting ROLE_API authentication for path {}", path)
             SecurityContextHolder.getContext().authentication = auth
         }
 

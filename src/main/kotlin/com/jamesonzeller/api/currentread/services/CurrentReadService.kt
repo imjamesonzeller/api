@@ -4,9 +4,11 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.stereotype.Service
+import org.slf4j.LoggerFactory
 
 @Service
 class CurrentReadService {
+    private val logger = LoggerFactory.getLogger(CurrentReadService::class.java)
 
     @Cacheable("currentRead")
     fun getCurrentRead(): String {
@@ -26,7 +28,7 @@ class CurrentReadService {
             val metaTag = doc.selectFirst("meta[name=description]")
             metaTag?.attr("content") ?: FALLBACK
         } catch (e: Exception) {
-            println("Failed to fetch or parse Goodreads page: ${e.message}")
+            logger.error("Failed to fetch or parse Goodreads page", e)
             FALLBACK
         }
     }
@@ -35,13 +37,13 @@ class CurrentReadService {
         return try {
             raw.split("currently reading", ignoreCase = true)[1].trim()
         } catch (e: IndexOutOfBoundsException) {
-            println("Failed to parse current read from input: \"$raw\"")
+            logger.warn("Failed to parse current read from input: {}", raw)
             FALLBACK
         }
     }
 
     private companion object {
-        const val FALLBACK = "Tuesdays with Morrie by Mitch Albom"
+        private const val FALLBACK = "Tuesdays with Morrie by Mitch Albom"
     }
 
     fun testableParse(raw: String): String = parseTitleAndAuthor(raw)

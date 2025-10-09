@@ -3,6 +3,7 @@ package com.jamesonzeller.api.mirror.calendarevents.services
 import com.jamesonzeller.api.mirror.calendarevents.models.Event
 import com.google.api.services.calendar.Calendar
 import org.apache.http.HttpException
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.LocalDate
 import java.time.ZonedDateTime
@@ -15,6 +16,7 @@ import java.time.format.DateTimeParseException
 class UpcomingEventsService(
     private val calendarService: Calendar
 ) {
+    private val logger = LoggerFactory.getLogger(UpcomingEventsService::class.java)
     private val zone = java.time.ZoneId.of("America/Chicago")
     private data class RequestInformation(
         val calendarId: String,
@@ -37,7 +39,7 @@ class UpcomingEventsService(
 
             val isoMidnightTomorrow = midnightTomorrow.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
 
-            println("Getting the upcoming 10 events")
+            logger.info("Getting the upcoming 10 events")
 
             val calendarIDs = listOf(
                 "imjamesonzeller@gmail.com",
@@ -55,8 +57,8 @@ class UpcomingEventsService(
             events.sortAndTruncateInPlace()
             return events.removeTomorrowEvents()
         } catch (e: HttpException) {
-            println("An error occured: ${e.message}")
-            return listOf(Event("An error occured: ${e.message}", "ERROR", "ERROR"))
+            logger.error("An error occurred while retrieving upcoming events", e)
+            return listOf(Event("An error occurred: ${e.message}", "ERROR", "ERROR"))
         }
     }
 
@@ -79,7 +81,7 @@ class UpcomingEventsService(
         val items = eventsResults.items ?: emptyList()
 
         if (items.isEmpty()) {
-            println("No upcoming events")
+            logger.info("No upcoming events found for calendar {}", info.calendarId)
         }
 
         for (event in items) {
