@@ -2,6 +2,8 @@
 FROM gradle:8.9-jdk17-alpine AS builder
 WORKDIR /workspace
 
+ENV ORG_GRADLE_PROJECT_javaToolchainDownload=true
+
 # Copy only wrapper + build scripts first for better cache
 COPY gradlew ./
 COPY gradle gradle
