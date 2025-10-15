@@ -1,0 +1,39 @@
+# ---- Build stage ----
+FROM gradle:8.9-jdk17-alpine AS builder
+WORKDIR /workspace
+
+# Copy only wrapper + build scripts first for better cache
+COPY gradlew ./
+COPY gradle gradle
+COPY build.gradle.kts settings.gradle.kts ./
+# If you use Maven, replace the above with your pom.xml etc.
+
+# Ensure the wrapper is executable (avoids git exec-bit issues)
+RUN chmod +x ./gradlew
+
+# Prime dependency cache (won't build the app yet)
+# If you have submodules or more build scripts, copy them above before this
+RUN ./gradlew --no-daemon help
+
+# Now copy the rest of the sources
+COPY . .
+
+# Build the bootable jar; add flags you use locally
+# Add --stacktrace so Docker logs show the real failure reason
+RUN ./gradlew clean bootJar -x test -x check --no-daemon --stacktrace
+
+# ---- Runtime stage ----
+FROM eclipse-temurin:17-jdk-alpine
+WORKDIR /app
+
+# Copy the jar built in the first stage
+COPY --from=builder /workspace/build/libs/*.jar app.jar
+
+# Make Spring use Railway's assigned port
+ENV PORT=8080
+EXPOSE 8080
+
+# (You already have this in application.properties:)
+# server.port=${PORT:8080}
+
+ENTRYPOINT ["java", "-jar", "app.jar"]
